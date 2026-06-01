@@ -1115,19 +1115,44 @@ async function ensureToken() {
 // ============================================================
 // SPOTIFY API
 // ============================================================
-async function api(path, opts = {}) {
+async function api(path, opts = {}, _retry = false) {
   await ensureToken();
-  const res = await fetch('https://api.spotify.com/v1' + path, {
-    ...opts,
-    headers: {
-      Authorization: 'Bearer ' + token,
-      'Content-Type': 'application/json',
-      ...opts.headers
-    }
-  });
+  if (!token) { toast('Not authenticated'); return null; }
+  let res;
+  try {
+    res = await fetch('https://api.spotify.com/v1' + path, {
+      ...opts,
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'application/json',
+        ...opts.headers
+      }
+    });
+  } catch (e) {
+    toast('Network error: ' + e.message);
+    return null;
+  }
   if (res.status === 204 || res.status === 202) return {};
-  if (res.status === 401) { await tryRefresh(); return api(path, opts); }
-  if (!res.ok) return null;
+  if (res.status === 401 && !_retry) {
+    const ok = await tryRefresh();
+    if (ok) return api(path, opts, true);
+    toast('Session expired - reconnect');
+    return null;
+  }
+  if (res.status === 403) {
+    // audio-features etc may be blocked; only toast for non-feature calls
+    if (!path.includes('audio-features') && !path.includes('recommendations')) {
+      toast('Spotify 403 on ' + path.split('?')[0]);
+    }
+    return null;
+  }
+  if (res.status === 429) { toast('Rate limited - wait a moment'); return null; }
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    toast('API ' + res.status + ': ' + path.split('?')[0]);
+    console.error('API error', res.status, body);
+    return null;
+  }
   return res.json().catch(() => ({}));
 }
 
@@ -1169,11 +1194,14 @@ async function findDevice() {
 // ============================================================
 async function doSearch() {
   const q = document.getElementById('search-input').value.trim();
-  if (!q) return;
+  if (!q) { toast('Type something to search'); return; }
   showLoading(true);
   const data = await api(`/search?q=${encodeURIComponent(q)}&type=track&limit=15`);
   showLoading(false);
-  renderResults(data?.tracks?.items || []);
+  if (!data) { toast('Search failed - check connection'); return; }
+  const items = data?.tracks?.items || [];
+  toast(items.length + ' results');
+  renderResults(items);
 }
 
 function renderResults(tracks) {
