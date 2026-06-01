@@ -1035,7 +1035,7 @@ async function sha256b64(str) {
 async function login() {
   const verifier = randStr(64);
   const challenge = await sha256b64(verifier);
-  sessionStorage.setItem('cv', verifier);
+  localStorage.setItem('cv', verifier);
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: CLIENT_ID,
@@ -1052,7 +1052,7 @@ async function handleCallback() {
   const code = p.get('code');
   if (!code) return false;
 
-  const verifier = sessionStorage.getItem('cv');
+  const verifier = localStorage.getItem('cv');
   showLoading(true);
 
   try {
@@ -1074,10 +1074,13 @@ async function handleCallback() {
       localStorage.setItem('mx_rt', refreshTok);
       localStorage.setItem('mx_at', token);
       localStorage.setItem('mx_exp', Date.now() + (data.expires_in - 60) * 1000);
+      localStorage.removeItem('cv');
       window.history.replaceState({}, '', '/');
       return true;
+    } else {
+      alert('Token exchange failed: ' + (data.error_description || data.error || 'unknown'));
     }
-  } catch(e) { console.error(e); }
+  } catch(e) { alert('Auth error: ' + e.message); console.error(e); }
 
   showLoading(false);
   return false;
