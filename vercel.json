@@ -1,18 +1,12 @@
 {
-  "rewrites": [
-    {
-      "source": "/callback",
-      "destination": "/callback.html"
-    }
-  ],
   "routes": [
     {
       "src": "/callback",
-      "dest": "/callback.html"
+      "dest": "/public/callback.html"
     },
     {
       "src": "/(.*)",
-      "dest": "/index.html"
+      "dest": "/public/index.html"
     }
   ]
 }
