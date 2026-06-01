@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>MIXR</title>
+<style>
+  body{background:#0a0a0c;color:#e8e8f0;font-family:monospace;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+  .w{text-align:center}
+  .logo{font-size:36px;font-weight:900;letter-spacing:8px;color:#00e5ff;margin-bottom:16px}
+  .spinner{width:36px;height:36px;border:3px solid #222;border-top-color:#00e5ff;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
+  .sub{color:#555;font-size:12px;letter-spacing:3px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="w">
+  <div class="logo">MIXR</div>
+  <div class="spinner"></div>
+  <div class="sub">CONNECTING TO SPOTIFY...</div>
+</div>
+<script>
+  // Forward code+state back to main app
+  const p = new URLSearchParams(window.location.search);
+  const code = p.get('code');
+  const state = p.get('state');
+  if (code) {
+    window.location.href = '/?code=' + encodeURIComponent(code) + (state ? '&state=' + state : '');
+  } else {
+    window.location.href = '/';
+  }
+</script>
+</body>
+</html>
