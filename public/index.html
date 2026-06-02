@@ -1053,6 +1053,7 @@ async function handleCallback() {
   if (!code) return false;
 
   const verifier = localStorage.getItem('cv');
+  if (!verifier) { alert('Missing code_verifier - browser cleared storage. Try again in same tab.'); return false; }
   showLoading(true);
 
   try {
@@ -1633,6 +1634,13 @@ function showLoading(on) {
 // BOOT
 // ============================================================
 (async () => {
+  // Show any Spotify error returned in URL
+  const _p = new URLSearchParams(window.location.search);
+  if (_p.get('error')) {
+    alert('Spotify returned error: ' + _p.get('error'));
+    document.getElementById('login-screen').style.display = 'flex';
+    return;
+  }
   // Handle callback redirect
   if (window.location.search.includes('code=')) {
     const ok = await handleCallback();
