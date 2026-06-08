@@ -1200,26 +1200,9 @@ async function doSearch() {
   const q = document.getElementById('search-input').value.trim();
   if (!q) { toast('Type something to search'); return; }
   showLoading(true);
-  // Direct fetch with full error reporting
-  await ensureToken();
-  let res, bodyText;
-  try {
-    res = await fetch('https://api.spotify.com/v1/search?q=' + encodeURIComponent(q) + '&type=track&limit=15', {
-      headers: { Authorization: 'Bearer ' + token }
-    });
-    bodyText = await res.text();
-  } catch (e) {
-    showLoading(false);
-    alert('FETCH FAILED: ' + e.message);
-    return;
-  }
+  const data = await api('/search?q=' + encodeURIComponent(q) + '&type=track&limit=10');
   showLoading(false);
-  if (!res.ok) {
-    alert('Spotify ' + res.status + ': ' + bodyText.slice(0, 300));
-    return;
-  }
-  let data;
-  try { data = JSON.parse(bodyText); } catch(e) { alert('Bad JSON: ' + bodyText.slice(0,200)); return; }
+  if (!data) { toast('Search failed - reconnect'); return; }
   const items = data?.tracks?.items || [];
   toast(items.length + ' results');
   renderResults(items);
