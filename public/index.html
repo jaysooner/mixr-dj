@@ -1181,15 +1181,27 @@ async function initApp() {
   showLoading(false);
 }
 
-async function findDevice() {
+async function findDevice(transfer = true) {
   const data = await api('/me/player/devices');
   if (data?.devices?.length) {
-    // Prefer phone/smartphone, then any active device
-    const phone = data.devices.find(d => d.type === 'Smartphone' || d.is_active) || data.devices[0];
-    deviceId = phone.id;
-    toast('🎵 Device: ' + phone.name);
+    // Prefer active, then smartphone, then anything
+    const dev = data.devices.find(d => d.is_active)
+             || data.devices.find(d => d.type === 'Smartphone')
+             || data.devices[0];
+    deviceId = dev.id;
+    toast('Device: ' + dev.name + (dev.is_active ? ' (active)' : ''));
+    // Transfer playback to this device so it can receive play commands
+    if (transfer && !dev.is_active) {
+      await api('/me/player', {
+        method: 'PUT',
+        body: JSON.stringify({ device_ids: [deviceId], play: false })
+      });
+      await new Promise(r => setTimeout(r, 600));
+    }
+    return dev;
   } else {
-    toast('⚠️ Open Spotify app on your phone first');
+    toast('No device. Open Spotify & play any song for 1 sec, then retry');
+    return null;
   }
 }
 
@@ -1309,17 +1321,27 @@ async function loadTrack(deck, id, uri, title, artist, art, dur) {
 
   // Play on Spotify
   activeDeck = deck;
-  if (!deviceId) await findDevice();
-  if (deviceId) {
-    await api(`/me/player/play?device_id=${deviceId}`, {
+  const dev = await findDevice();
+  if (dev && deviceId) {
+    const playRes = await fetch('https://api.spotify.com/v1/me/player/play?device_id=' + deviceId, {
       method: 'PUT',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
       body: JSON.stringify({ uris: [uri] })
     });
-    D[deck].playing = true;
-    setPlayBtn(deck, true);
-    document.getElementById(`platter-${deck}`).classList.add('spinning');
+    if (playRes.ok) {
+      D[deck].playing = true;
+      setPlayBtn(deck, true);
+      document.getElementById(`platter-${deck}`).classList.add('spinning');
+    } else {
+      const errTxt = await playRes.text().catch(()=>'');
+      let msg = 'Play failed (' + playRes.status + ')';
+      if (playRes.status === 404) msg = 'Device not ready - open Spotify, play any song 1 sec, then tap again';
+      else if (playRes.status === 403) msg = 'Premium required for playback';
+      toast(msg);
+      console.error('play error', playRes.status, errTxt);
+    }
   } else {
-    toast('⚠️ No Spotify device found. Open Spotify app!');
+    toast('No Spotify device. Open the Spotify app first!');
   }
 
   // Switch to the deck tab that was loaded
