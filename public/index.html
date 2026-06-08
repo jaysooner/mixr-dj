@@ -1326,7 +1326,7 @@ async function loadTrack(deck, id, uri, title, artist, art, dur) {
   showTab(deck);
 
   // AI suggestions
-  if (f?.tempo) getAiSuggestions(id, f.tempo, f.energy);
+  if (D[deck].bpm) getAiSuggestions(id, D[deck].bpm, D[deck].features?.energy || 0.6);
 
   toast(`Loaded to Deck ${deck.toUpperCase()}: ${title}`);
 }
