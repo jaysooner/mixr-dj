@@ -1233,12 +1233,51 @@ function renderResults(tracks) {
     `;
     list.appendChild(item);
 
-    // Async BPM
-    api(`/audio-features/${t.id}`).then(f => {
+    // Async BPM via fallback API
+    fetchBPM(t).then(info => {
       const el = document.getElementById(`rm-${t.id}`);
-      if (el && f?.tempo) el.textContent = `${Math.round(f.tempo)} BPM · ${KEY_NAMES[f.key]}${MODE_NAMES[f.mode]} · ⚡${Math.round(f.energy*100)}%`;
+      if (!el) return;
+      if (info && info.tempo) {
+        el.textContent = `${Math.round(info.tempo)} BPM` + (info.key ? ` · ${info.key}` : '');
+      } else {
+        el.textContent = `${Math.round((t.duration_ms||0)/1000/60)}:${String(Math.round((t.duration_ms||0)/1000)%60).padStart(2,'0')} · tap to load`;
+      }
     });
   });
+}
+
+
+// ============================================================
+// BPM FETCH (Spotify audio-features w/ graceful fallback)
+// ============================================================
+const bpmCache = {};
+async function fetchBPM(track) {
+  const id = track.id;
+  if (bpmCache[id]) return bpmCache[id];
+  // Try Spotify audio-features (works if app has access)
+  try {
+    await ensureToken();
+    const res = await fetch('https://api.spotify.com/v1/audio-features/' + id, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (res.ok) {
+      const f = await res.json();
+      if (f && f.tempo) {
+        const info = {
+          tempo: f.tempo,
+          key: KEY_NAMES[f.key] + MODE_NAMES[f.mode],
+          energy: f.energy,
+          danceability: f.danceability,
+          keyIdx: f.key, mode: f.mode
+        };
+        bpmCache[id] = info;
+        return info;
+      }
+    }
+  } catch (e) {}
+  // Fallback: no BPM available (endpoint blocked for this app)
+  bpmCache[id] = null;
+  return null;
 }
 
 // ============================================================
@@ -1261,16 +1300,22 @@ async function loadTrack(deck, id, uri, title, artist, art, dur) {
   const artEl = document.getElementById(`art-${deck}`);
   artEl.innerHTML = art ? `<img src="${art}" alt="">` : '<div class="no-art">🎵</div>';
 
-  // Audio features
-  const f = await api(`/audio-features/${id}`);
-  if (f?.tempo) {
-    D[deck].bpm = f.tempo;
-    D[deck].features = f;
-    document.getElementById(`bpm-${deck}`).textContent = Math.round(f.tempo);
-    document.getElementById(`key-${deck}`).textContent = `${KEY_NAMES[f.key]}${MODE_NAMES[f.mode]}`;
-    document.getElementById(`energy-${deck}`).textContent = `⚡${Math.round(f.energy*100)}%`;
-    document.getElementById('master-bpm').textContent = Math.round(f.tempo);
-    genWave(deck, f);
+  // Audio features (graceful)
+  const info = await fetchBPM({ id });
+  if (info && info.tempo) {
+    D[deck].bpm = info.tempo;
+    D[deck].features = { tempo: info.tempo, energy: info.energy || 0.6, danceability: info.danceability || 0.6, key: info.keyIdx || 0, mode: info.mode || 1 };
+    document.getElementById(`bpm-${deck}`).textContent = Math.round(info.tempo);
+    document.getElementById(`key-${deck}`).textContent = info.key || '—';
+    document.getElementById(`energy-${deck}`).textContent = info.energy ? `⚡${Math.round(info.energy*100)}%` : '—';
+    document.getElementById('master-bpm').textContent = Math.round(info.tempo);
+    genWave(deck, D[deck].features);
+  } else {
+    document.getElementById(`bpm-${deck}`).textContent = '—';
+    document.getElementById(`key-${deck}`).textContent = '—';
+    document.getElementById(`energy-${deck}`).textContent = '—';
+    // still draw a generic waveform so the deck looks alive
+    genWave(deck, { energy: 0.6, danceability: 0.6 });
   }
 
   // Play on Spotify
