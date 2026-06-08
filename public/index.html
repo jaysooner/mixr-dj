@@ -1217,67 +1217,56 @@ function renderResults(tracks) {
   }
   tracks.forEach(t => {
     const art = t.album.images[1]?.url || t.album.images[0]?.url || '';
+    const artistNames = t.artists.map(a => a.name).join(', ');
     const item = document.createElement('div');
     item.className = 'result-item';
-    item.innerHTML = `
-      <img class="result-art" src="${art}" alt="" onerror="this.style.background='var(--border)'">
-      <div class="result-info">
-        <div class="result-name">${t.name}</div>
-        <div class="result-artist-sm">${t.artists.map(a=>a.name).join(', ')}</div>
-        <div class="result-meta" id="rm-${t.id}">analyzing...</div>
-      </div>
-      <div class="load-btns">
-        <button class="lb lb-a" onclick="loadTrack('a','${t.id}','${t.uri}',${JSON.stringify(t.name)},${JSON.stringify(t.artists[0].name)},'${art}',${Math.round(t.duration_ms/1000)})">▶ A</button>
-        <button class="lb lb-b" onclick="loadTrack('b','${t.id}','${t.uri}',${JSON.stringify(t.name)},${JSON.stringify(t.artists[0].name)},'${art}',${Math.round(t.duration_ms/1000)})">▶ B</button>
-      </div>
-    `;
+
+    const img = document.createElement('img');
+    img.className = 'result-art';
+    img.src = art;
+    img.onerror = () => { img.style.background = 'var(--border)'; };
+
+    const info = document.createElement('div');
+    info.className = 'result-info';
+    const nm = document.createElement('div');
+    nm.className = 'result-name';
+    nm.textContent = t.name;
+    const ar = document.createElement('div');
+    ar.className = 'result-artist-sm';
+    ar.textContent = artistNames;
+    const meta = document.createElement('div');
+    meta.className = 'result-meta';
+    meta.id = 'rm-' + t.id;
+    meta.textContent = 'analyzing...';
+    info.appendChild(nm); info.appendChild(ar); info.appendChild(meta);
+
+    const btns = document.createElement('div');
+    btns.className = 'load-btns';
+    const btnA = document.createElement('button');
+    btnA.className = 'lb lb-a';
+    btnA.textContent = '\u25B6 A';
+    btnA.addEventListener('click', () => loadTrack('a', t.id, t.uri, t.name, t.artists[0].name, art, Math.round(t.duration_ms/1000)));
+    const btnB = document.createElement('button');
+    btnB.className = 'lb lb-b';
+    btnB.textContent = '\u25B6 B';
+    btnB.addEventListener('click', () => loadTrack('b', t.id, t.uri, t.name, t.artists[0].name, art, Math.round(t.duration_ms/1000)));
+    btns.appendChild(btnA); btns.appendChild(btnB);
+
+    item.appendChild(img); item.appendChild(info); item.appendChild(btns);
     list.appendChild(item);
 
-    // Async BPM via fallback API
-    fetchBPM(t).then(info => {
-      const el = document.getElementById(`rm-${t.id}`);
+    // Async BPM via fallback
+    fetchBPM(t).then(infoBpm => {
+      const el = document.getElementById('rm-' + t.id);
       if (!el) return;
-      if (info && info.tempo) {
-        el.textContent = `${Math.round(info.tempo)} BPM` + (info.key ? ` · ${info.key}` : '');
+      if (infoBpm && infoBpm.tempo) {
+        el.textContent = Math.round(infoBpm.tempo) + ' BPM' + (infoBpm.key ? ' \u00B7 ' + infoBpm.key : '');
       } else {
-        el.textContent = `${Math.round((t.duration_ms||0)/1000/60)}:${String(Math.round((t.duration_ms||0)/1000)%60).padStart(2,'0')} · tap to load`;
+        const secs = Math.round((t.duration_ms||0)/1000);
+        el.textContent = Math.floor(secs/60) + ':' + String(secs%60).padStart(2,'0');
       }
     });
   });
-}
-
-
-// ============================================================
-// BPM FETCH (Spotify audio-features w/ graceful fallback)
-// ============================================================
-const bpmCache = {};
-async function fetchBPM(track) {
-  const id = track.id;
-  if (bpmCache[id]) return bpmCache[id];
-  // Try Spotify audio-features (works if app has access)
-  try {
-    await ensureToken();
-    const res = await fetch('https://api.spotify.com/v1/audio-features/' + id, {
-      headers: { Authorization: 'Bearer ' + token }
-    });
-    if (res.ok) {
-      const f = await res.json();
-      if (f && f.tempo) {
-        const info = {
-          tempo: f.tempo,
-          key: KEY_NAMES[f.key] + MODE_NAMES[f.mode],
-          energy: f.energy,
-          danceability: f.danceability,
-          keyIdx: f.key, mode: f.mode
-        };
-        bpmCache[id] = info;
-        return info;
-      }
-    }
-  } catch (e) {}
-  // Fallback: no BPM available (endpoint blocked for this app)
-  bpmCache[id] = null;
-  return null;
 }
 
 // ============================================================
